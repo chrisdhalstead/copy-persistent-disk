@@ -10,8 +10,10 @@
 $Tab = [char]9
 $VbCrLf = “`r`n” 
 $un = $env:USERNAME #Local Logged in User
+$pool = Get-ItemProperty -Path 'HKCU:\Volatile Environment' 'ViewClient_Broker_Farm_ID'
+$poolname = $pool.ViewClient_Broker_Farm_ID
 $sComputer = $env:COMPUTERNAME #Local Computername
-$sLogName = "copy-pd-$un.log" #Log File Name
+$sLogName = "copypd#$un#$poolname.log" #Log File Name
 $sLogPath = $PSScriptRoot #Current Directory
 $sLogFile = Join-Path -Path $sLogPath -ChildPath $sLogName
 Add-Content $sLogFile -Value $vbcrlf
