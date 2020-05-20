@@ -3,7 +3,7 @@
 # Josh Spencer / Chris Halstead - VMware
 # There is NO support for this script - it is provided as is
 # #
-# Version 1.0 - May 1, 2020
+# Version 1.1 - May 20, 2020
 ##########################################################################################
 
 #Create Log File
