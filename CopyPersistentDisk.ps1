@@ -178,10 +178,23 @@ foreach ($dl in $drives) {
   }
 
  }
+
+ Function AuditMode {
+
+
+
+
+
+
+
+ }
  
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
+$auditmode = $args[0]
+
 Write-Log -Message "Starting Execution of Script******************************************"
+
 
 #Look for a local Persistent Disk
 FindPersistentDisk
@@ -191,6 +204,16 @@ if ($script:pd -eq "NOT_FOUND") {
   write-log("Finishing Script***********************************************************")
   exit
 
+}
+
+#Check for audit mode
+if ($auditmode.toupper() -eq "AUDIT")
+
+{
+
+  write-log -Message "Run auditing mode"
+  write-log("Finishing Script***********************************************************")
+  exit
 }
 
 #Compare and sync Persistent Disk Locally
