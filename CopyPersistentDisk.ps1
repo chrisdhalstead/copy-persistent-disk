@@ -47,7 +47,8 @@ Function Write-Log {
 Function Compare-and-Sync {
 
 #Get local profile path
-$LocalPath = [Environment]::GetFolderPath("MyDocuments") + "\DatafromPD-$un".Replace($script:pd,"c")
+$mydocs = [Environment]::GetFolderPath("MyDocuments")
+$LocalPath = $mydocs + "\DatafromPD-$un"
 Write-Log -Message "Local Path: $LocalPath"
 
 #Get Persistent Disk path
