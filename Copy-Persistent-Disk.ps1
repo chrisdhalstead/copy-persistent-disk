@@ -75,7 +75,7 @@ if (!(Test-Path $pddestfs))
   New-Item -ItemType Directory -Path $pddestfs
   #Doing initial sync from the Persistent Disk
   Write-Log("$tab Doing Intial Sync from Persistent Disk")
-  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak")}
+  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak","*NTUSER.DAT*")}
 
 }
 else
@@ -87,7 +87,7 @@ $checklocalfolder = Get-ChildItem -Path $pddestfs
 if ($checklocalfolder.count -eq 0) {
 
   Write-Log("$tab Doing Intial Sync from Persistent Disk")
-  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$script:pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak")}
+  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$script:pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak","*NTUSER.DAT*")}
 
 } else {
   
@@ -107,6 +107,8 @@ $diffs = Compare-Object -ReferenceObject $PDDocs -DifferenceObject $script:Local
 
 #Filter out only files that are different or do not exist in the Local Directory as well as any profile folders
 $pddiffs = $diffs | ?{($_.SideIndicator -eq '<=' -and $_.path -notlike $script:pd + ":\personality*")}
+
+write-log -message $pddiffs
 
 #If both directories are the same - exit
 if(!$pddiffs)
