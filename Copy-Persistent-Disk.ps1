@@ -75,22 +75,90 @@ if (!(Test-Path $pddestfs))
   New-Item -ItemType Directory -Path $pddestfs
   #Doing initial sync from the Persistent Disk
   Write-Log("$tab Doing Intial Sync from Persistent Disk")
-  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$pddestfs" -Recurse -Force -Exclude @("Users","Personality","Personality.bak")}
+  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak")}
 
-  #Add Flag File
-  out-file $pddestfs"\PD-flag.txt"
 }
 else
 {  
    
-    Write-Log("$tab Doing Sync from Persistent Disk")
-    Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$pddestfs" -Recurse -Force -Exclude @("Users","Personality","Personality.bak")}
+#Check to see if the folder is empty - if it is do an initial sync of a data except profile data
+$checklocalfolder = Get-ChildItem -Path $pddestfs
 
-     #Add Flag File
-    out-file $pddestfs"\PD-flag.txt"
+if ($checklocalfolder.count -eq 0) {
+
+  Write-Log("$tab Doing Intial Sync from Persistent Disk")
+  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$script:pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak")}
+
+} else {
   
+  #Get SHA256 Hash of each file in the Persistent Disk
+write-log -message "Getting file hashes from Persistent Disk Directory"
+try{$script:PDDocs = Get-ChildItem –Path $PDPath -Recurse | foreach-object {Get-FileHash –Path $_.FullName}}
+catch{write-log -message "Error Getting Hash of Persistent Disk File $_" }
+
+#Get SHA256 Hash of each file in the Remote Directory
+write-log -message "Getting file hashes from Remote Directory"
+try{$script:LocalDocs = Get-ChildItem –Path $pddestfs -Recurse | foreach-object {Get-FileHash –Path $_.FullName}}
+catch{write-log -message "Error Getting Hash of Remote File $_"}
+
+#Get the files that are different or do not exist
+write-log -message "Comparing Local and Remote File Hashes"
+$diffs = Compare-Object -ReferenceObject $PDDocs -DifferenceObject $script:LocalDocs -Property Hash -PassThru
+
+#Filter out only files that are different or do not exist in the Local Directory as well as any profile folders
+$pddiffs = $diffs | ?{($_.SideIndicator -eq '<=' -and $_.path -notlike $script:pd + ":\personality*")}
+
+#If both directories are the same - exit
+if(!$pddiffs)
+{
+  write-log -Message "Directories are the same - exiting"
+  write-log -Message "Setting Flag File"
+  out-file $script:pddestfs"\PD-flag.txt"
+  Write-Log -Message "Finishing Script******************************************************"
+  Exit
 }
 
+$inumfiles = $personadiffs.count
+write-log -Message "Copying $inumfiles files"
+
+#Loop through each file in the list of differences
+Foreach ($sfile in $pddiffs) 
+  {
+    $sfilehash = $sfile.Hash
+    $sfilename = $sfile.path
+
+    #Skip any of the Profile Directories on the Persistent Disk
+    if ($sfilename -like $script:pd + ":\personality*")
+    {
+      #Go to the next item in the loop
+      continue
+    }
+
+    #File to be copied
+    Write-Log -Message "File to be copied: $sfilename Hash: $sfilehash"
+
+    $fixedfile = $sfile.path
+    $filearray = $fixedfile.split($PDPath)
+    $destfile = "$pddestfs\$filearray[1]"
+    
+    Write-Log -Message "$tab Destination Filename: $destfile"
+
+    #Check if the file already exists - if not create a placeholder file in the location
+    #This will prevent getting an error if the directory does not exist
+    if (!(Test-Path $destfile))  {
+      Write-Log("$tab File $destfile not found-creating placeholder")
+      New-Item -ItemType File -Path $destfile -Force}
+    
+    #Overwrite the file in the destination 
+    Write-Log -Message "$tab Copying $sfilename to $destfile"
+    try{Copy-Item -Path $sfile.path -Destination $destfile -Force -Exclude @("Personality","Personality.bak")} Catch{write-log -message "Error Copying file $_"}
+    if (Test-Path $destfile)  {
+      Write-Log("$tab File $destfile copied")
+           }
+
+          }
+        }
+}
 }
 
 Function Copy-Back {
@@ -193,7 +261,7 @@ if ($script:pd -eq "NOT_FOUND") {
                   }
                   else 
                   {
-                    
+
                     #Flag file found indicating ready to copy back data- copy data to local profile
                     write-log("Flag file found indicating copy back ready - copying to local directory - $script:copypath")  
                     Copy-Back
