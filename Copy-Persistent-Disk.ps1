@@ -1,11 +1,10 @@
-﻿
-#########################################################################################
+﻿#########################################################################################
 # Script to copy non profile data from a Persistent Disk to a network share
 # It will also detect a FSLogix Profile and copy the data back
 # Josh Spencer / Chris Halstead - VMware
 # There is NO support for this script - it is provided as is
 # 
-# Version 1.5 - July 12, 2020
+# Version 1.5 - July 14, 2020
 ##########################################################################################
 
 #Create Log File
@@ -33,7 +32,7 @@ $script:CopyPath = [Environment]::GetFolderPath("MyDocuments")+"\ExtrasFromPersi
 #Enter path of file share where user data can be copied
 $pddestfs = "\\hzn-79-cs1-cdh.betavmweuc.com\PDData\$un"
 
-#End Update **********************************
+#End Update ******************************************
 
 Function Write-Log {
   [CmdletBinding()]
@@ -57,7 +56,7 @@ Function Write-Log {
       catch {}
   } until ($isWritten)
      
-  }
+}
 
 Function Compare-and-Sync {
 
@@ -75,8 +74,7 @@ if (!(Test-Path $pddestfs))
   New-Item -ItemType Directory -Path $pddestfs
   #Doing initial sync from the Persistent Disk
   Write-Log("$tab Doing Intial Sync from Persistent Disk")
-  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak","*NTUSER.DAT*")}
-
+  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak","*ntuser*")}
 }
 else
 {  
@@ -87,7 +85,7 @@ $checklocalfolder = Get-ChildItem -Path $pddestfs
 if ($checklocalfolder.count -eq 0) {
 
   Write-Log("$tab Doing Intial Sync from Persistent Disk")
-  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$script:pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak","*NTUSER.DAT*")}
+  Get-ChildItem -Path $pdpath | % {Copy-Item $_.FullName "$script:pddestfs" -Recurse -Force -Exclude @("Personality","Personality.bak","*ntuser*")}
 
 } else {
   
@@ -114,14 +112,11 @@ write-log -message $pddiffs
 if(!$pddiffs)
 {
   write-log -Message "Directories are the same - exiting"
-  write-log -Message "Setting Flag File"
-  out-file $script:pddestfs"\PD-flag.txt"
+  #write-log -Message "Setting Flag File"
+  #out-file $script:pddestfs"\PD-flag.txt"
   Write-Log -Message "Finishing Script******************************************************"
   Exit
 }
-
-$inumfiles = $personadiffs.count
-write-log -Message "Copying $inumfiles files"
 
 #Loop through each file in the list of differences
 Foreach ($sfile in $pddiffs) 
@@ -129,9 +124,17 @@ Foreach ($sfile in $pddiffs)
     $sfilehash = $sfile.Hash
     $sfilename = $sfile.path
 
-    #Skip any of the Profile Directories on the Persistent Disk
-    if ($sfilename -like $script:pd + ":\personality*")
+    #Skip any of the Profile Directories or NTUSER.DAT on the Persistent Disk
+    if ($sfilename -like $script:pd + ":\personality*") 
     {
+      write-log -message "Skipping personality folder"
+      #Go to the next item in the loop
+      continue
+    }
+
+    if ($sfilename -like "*ntuser*") 
+    {
+      write-log -message "Skipping ntuser.dat"
       #Go to the next item in the loop
       continue
     }
@@ -139,9 +142,14 @@ Foreach ($sfile in $pddiffs)
     #File to be copied
     Write-Log -Message "File to be copied: $sfilename Hash: $sfilehash"
 
+    #Get file name with new desktination
+    $pddrive = $script:pd+":"
     $fixedfile = $sfile.path
-    $filearray = $fixedfile.split($PDPath)
-    $destfile = "$pddestfs\$filearray[1]"
+    $filearray = $fixedfile.split("\")
+    $localremoved = $filearray -ne $pddrive
+    $stempdir = $pddestfs
+    foreach ($dir in $localremoved) {$stempdir = $stempdir + "\" + $dir}
+    $destfile = $stempdir
     
     Write-Log -Message "$tab Destination Filename: $destfile"
 
@@ -154,10 +162,7 @@ Foreach ($sfile in $pddiffs)
     #Overwrite the file in the destination 
     Write-Log -Message "$tab Copying $sfilename to $destfile"
     try{Copy-Item -Path $sfile.path -Destination $destfile -Force -Exclude @("Personality","Personality.bak")} Catch{write-log -message "Error Copying file $_"}
-    if (Test-Path $destfile)  {
-      Write-Log("$tab File $destfile copied")
-           }
-
+    if (Test-Path $destfile)  {Write-Log("$tab File $destfile copied")}
           }
         }
 }
@@ -170,30 +175,21 @@ Function Copy-Back {
   
   #Get Local Path
   Write-Log -Message "Local Path: $script:CopyPath"
-   
-  #Check if local folder for Persistent Disk Data exists
-  if (!(Test-Path $script:CopyPath))  
-  {
-    Write-Log("$tab $script:CopyPath not found-creating folder")
-    New-Item -ItemType Directory -Path $script:CopyPath
-    #Doing initial sync from the Persistent Disk
-    Write-Log("$tab Doing Intial Sync from Remote Folder")
-    Get-ChildItem -Path $pddestfs | % {Copy-Item $_.FullName "$script:CopyPath" -Recurse -Force}
   
-    #Add Flag File
-    out-file $pddestfs"\PD-CopyBack-flag.txt"
-  }
-  else
-  {  
-     
-    Write-Log("$tab Doing Sync from Remote Folder")
-    Get-ChildItem -Path $pddestfs | % {Copy-Item $_.FullName "$script:CopyPath" -Recurse -Force}
-  
-    #Add Flag File
-    out-file $pddestfs"\PD-CopyBack-flag.txt"
+  #Create local folder if it doesn't exist
+  if (!(Test-Path $script:CopyPath)){New-Item -ItemType Directory -Path $script:CopyPath}
     
-  }
+  #Doing sync from the Remote Folder
+  Write-Log("$tab Doing Sync from Remote Folder all except users folder")
+  Get-ChildItem -Path $pddestfs -Exclude "Users" | % {Copy-Item $_.FullName "$script:CopyPath" -Recurse -Force}
+
+  #Doing sync from the Remote Folder
+  Write-Log("$tab Doing Sync from Remote Folder users folder")
+  Get-ChildItem -Path $pddestfs"\users\$un"  | % {Copy-Item $_.FullName $env:USERPROFILE -Recurse -Exclude "*ntuser*" -Force}
   
+  #Add Flag File
+  out-file $pddestfs"\PD-CopyBack-flag.txt"
+    
   }
 
 Function FindPersistentDisk {
@@ -246,22 +242,17 @@ if ($script:pd -eq "NOT_FOUND") {
   #Check remote location for coped PD Data
     if (Test-Path $pddestfs)  
     {
-      #Check to see if the remote folder exists
-          if (Test-Path $pddestfs)  
-            {
-              if (Test-Path $pddestfs"\PD-flag.txt")
-
-                {
-                  if (Test-Path $pddestfs"\PD-CopyBack-flag.txt")
+                               
+        if (Test-Path $pddestfs"\PD-CopyBack-flag.txt")
 
                   {
 
-                       #Flag file found indicating copy back done - exiting
-                       write-log("Flag file found indicating copy back done - exiting")  
-                       write-log("Finishing Script***********************************************************") 
+                    #Flag file found indicating copy back done - exiting
+                    write-log("Flag file found indicating copy back done - exiting")  
+                    write-log("Finishing Script***********************************************************") 
 
                   }
-                  else 
+        else 
                   {
 
                     #Flag file found indicating ready to copy back data- copy data to local profile
@@ -271,44 +262,21 @@ if ($script:pd -eq "NOT_FOUND") {
 
                   }  
                
-                }
-                else 
-                {
-                  #Flag file not found - not ready to copy skip
-                  write-log("Flag file not found - skipping copy back")  
-                  write-log("Finishing Script***********************************************************")  
-
-                }
-
-            }
-
+                        
     }       
     else 
     {
       write-log("Remote Folder not found*")  
       write-log("Finishing Script***********************************************************")  
 
-    }
-
-} 
+    } 
 
 else {
-
-  if(Test-Path $pddestfs"\PD-flag.txt")
-  {
-    write-log("Found Flag File - Skipping")
-    write-log("Finishing Script***********************************************************")
-  }
-
-  else 
-  {
+ 
   #Compare and sync Persistent Disk To Network Share
   Compare-and-Sync
   write-log("Finishing Script***********************************************************")  
-
-  }
-
-
+ 
 }
 
-
+}
