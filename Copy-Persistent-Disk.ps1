@@ -205,30 +205,30 @@ foreach ($dl in $drives) {
     $fn = $dl.filesystemlabel
 
     #Check if the label is caled PersistentDataDisk
-    if ($fn -eq "PersistentDataDisk")  
+      if ($fn -eq "PersistentDataDisk")  
         {
-      #Check if the simvol.dat file is on the root of the drive
-      if (Test-Path $driveletter":\simvol.dat")  {
-        Write-Log("Drive $driveletter IS a Persistent Disk")
-        $script:pd = $driveletter
-          }
-      else {
-        #Not a Persistent Disk 
+        #Check if the simvol.dat file is on the root of the drive
+        if (Test-Path $driveletter":\simvol.dat") 
+        
+          {
+          
+            Write-Log("Drive $driveletter IS a Persistent Disk")
+            $script:pd = $driveletter
+                    
+          } 
+
+        }
+
       }
-   } else {
-   #Not a Persistent Disk
-    }
 
-  }
+    if ($script:pd -eq "") {
+      #No Persistent Disk Found
+      $script:pd = "NOT_FOUND"
+      write-log("No Persistent Disk Found")
+    
+        }
 
-  if ($script:pd -eq "") {
-    #No Persistent Disk Found
-    $script:pd = "NOT_FOUND"
-    write-log("No Persistent Disk Found")
-   
-  }
-
- }
+}
  
 #-----------------------------------------------------------[Execution]------------------------------------------------------------
 
@@ -237,7 +237,8 @@ Write-Log -Message "Starting Execution of Script********************************
 #Look for a local Persistent Disk
 FindPersistentDisk
 
-if ($script:pd -eq "NOT_FOUND") {
+if ($script:pd -eq "NOT_FOUND") 
+{
   #No Persistent Disk Found 
   #Check remote location for coped PD Data
     if (Test-Path $pddestfs)  
@@ -261,22 +262,24 @@ if ($script:pd -eq "NOT_FOUND") {
                     write-log("Finishing Script***********************************************************") 
 
                   }  
-               
-                        
-    }       
+                                  
+                }
     else 
+
     {
       write-log("Remote Folder not found*")  
       write-log("Finishing Script***********************************************************")  
 
     } 
 
+}
+
 else {
  
   #Compare and sync Persistent Disk To Network Share
+  write-log("Persistent Disk Found - Starting Copy")
   Compare-and-Sync
   write-log("Finishing Script***********************************************************")  
  
 }
 
-}
